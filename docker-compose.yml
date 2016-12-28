@@ -1,0 +1,7 @@
+eve:
+  image: witheve/eve
+  volumes:
+    - ./:/eve
+  environment:
+    VIRTUAL_HOST: eve.test
+    VIRTUAL_PORT: 8080
