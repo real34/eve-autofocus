@@ -24,12 +24,13 @@ bind @browser
 ```
 
 ### Liste des tâches
-Elle affiche une liste de toutes mes tâches en cours (en phase de planification), et permet de les manipuler selon le système "Autofocus" (voir section dédiée).
+Elle affiche une liste de toutes mes tâches en cours (en phase de planification),
+et permet de les manipuler selon le système "Autofocus" (voir section dédiée).
 
 ```eve
 search @session @browser
   app = [#app phase: "planification"]
-	[#tache libelle timestampCreation]
+	[#tache libelle ordre]
   tache = [#tache]
   content = [#content]
 
@@ -37,8 +38,8 @@ bind @browser
   content.children :=
     [#ul children:
       [#li #todo tache
-        sort: tache.timestampCreation
-        text: "{{tache.libelle}}"]]
+        sort: tache.ordre
+        text: "{{tache.libelle}} ({{tache.ordre}})"]]
 ```
 
 Les tâches sélectionnées sont affichées en rouge, et les tâches terminées sont barrées et grisées :
@@ -103,17 +104,20 @@ commit @session @browser
 
 ## Autofocus
 Le système Autofocus consiste en des étapes différentes.
+
 ### Saisie des tâches l'une après l'autre
 Lorsqu'une tâche est ajoutée au système, elle l'est toujours en fin de liste (car c'est la plus récente).
 
 ```
 search
 	tache = [#tache]
-  not(tache = [timestampCreation])
-  [#time timestamp]
+  not(tache = [ordre])
+
+  sort[value: plusGrandOrdre direction: "down"] = 1
+  tachesAnciennes = [#tache ordre: plusGrandOrdre]
 
 commit
-	tache <- [timestampCreation: timestamp]
+	tache.ordre := plusGrandOrdre + 1
 ```
 
 ### Sélection de la tâche la plus ancienne
@@ -122,8 +126,8 @@ La planification débute par la sélection de la tâche la plus ancienne
 ```eve
 search
   [#app phase: "planification"]
-  sort[value: timestampCreation] = 1
-  plusAncienneTâche = [#tache not(#terminée) timestampCreation]
+  sort[value: ordre] = 1
+  plusAncienneTâche = [#tache not(#terminée) ordre]
 
 commit
 	plusAncienneTâche += #sélectionnée
@@ -136,10 +140,10 @@ tâche sélectionnée ("tâche X")
 ```
 search
 	[#app phase: "planification"]
-  sort[value: timestampCreationSelected direction: "down"] = 1
-  [#tache #sélectionnée timestampCreation: timestampCreationSelected]
-  tâchesSélectionnables = [#tache timestampCreation > timestampCreationSelected not(#terminée)]
-  tâchesNonSélectionnables = [#tache timestampCreation <= timestampCreationSelected]
+  sort[value: ordreSelectionnée direction: "down"] = 1
+  [#tache #sélectionnée ordre: ordreSelectionnée]
+  tâchesSélectionnables = [#tache ordre > ordreSelectionnée not(#terminée)]
+  tâchesNonSélectionnables = [#tache ordre <= ordreSelectionnée]
 
 commit
 	tâchesSélectionnables += #sélectionnable
@@ -181,8 +185,8 @@ réalisée (ou que la tâche la plus récente est sélectionnée), il est temps 
 
 ```
 search
-  sort[value: timestampCreation direction: "down"] = 1
-  tâcheLaPlusRécente = [#tache timestampCreation: timestampCreation]
+  sort[value: ordre direction: "down"] = 1
+  tâcheLaPlusRécente = [#tache ordre]
 
 bind @view
   [#value | value : tâcheLaPlusRécente.libelle]
@@ -201,8 +205,8 @@ sélectionnée. L'interface présente donc principalement son contenu à l'utili
 ```eve
 search @session @browser
   app = [#app phase: "action"]
-  sort[value: timestampFocalisé direction: "down"] = 1
-	tacheFocalisée = [#tache #sélectionnée libelle timestampCreation:timestampFocalisé]
+  sort[value: ordre direction: "down"] = 1
+	tacheFocalisée = [#tache #sélectionnée libelle ordre]
   content = [#content]
 
 bind @browser
@@ -219,9 +223,9 @@ affiché à l'utilisateur après l'action en cours :
 
 ```eve
 search @session @browser
-  aVenirIndex = sort[value: timestampAVenir direction: "down"]
+  aVenirIndex = sort[value: ordre direction: "down"]
   aVenirIndex > 1
-	tacheAVenir = [#tache #sélectionnée libelle timestampCreation:timestampAVenir]
+	tacheAVenir = [#tache #sélectionnée libelle ordre]
   actionEnCours = [#div #action]
 
 bind @browser
@@ -230,7 +234,7 @@ bind @browser
       [#h2 text: "À venir"]
       [#ul children:
         [#li #todo tacheAVenir
-          sort: [value: tacheAVenir.timestampCreation direction: "down"]
+          sort: [value: tacheAVenir.ordre direction: "down"]
           text: "{{tacheAVenir.libelle}}"]]]
 ```
 
@@ -251,16 +255,17 @@ La tâche en cours est alors marquée comme terminée et ajoutée à nouveau en 
 ```
 search @session @browser @event
   [#click element: [#finirActionSurTâche]]
-  sort[value: timestampCreation direction: "down"] = 1
-	tacheFocalisée = [#tache #sélectionnée timestampCreation]
-  
+  sort[value: ordre direction: "down"] = 1
+	tacheFocalisée = [#tache #sélectionnée ordre]
+
 commit @session
   tacheFocalisée -= #sélectionnée
   tacheFocalisée += #terminée
   [#tache libelle: tacheFocalisée.libelle]
 ```
 
-Dans la cas où d'autres tâches (antérieures) avaient été sélectionnées en phase de planification, la tâche sélectionnée la plus récente devient alors la tâche en cours et la session de travail peut reprendre.
+Dans la cas où d'autres tâches (antérieures) avaient été sélectionnées en phase de planification,
+la tâche sélectionnée la plus récente devient alors la tâche en cours et la session de travail peut reprendre.
 
 ```
 // Rien à faire ici, car automatique d'après les autres blocs
@@ -284,17 +289,16 @@ Afin d'avoir une interface un peu cohérente voici des exemples de données :
 search
 	app = [#app]
   not(app = [#init])
-  [#time timestamp]
 
 commit
 	app += #init
 
-  [#tache libelle: "Naître" #terminée timestampCreation: timestamp - 21]
-  [#tache libelle: "Se doucher" timestampCreation: timestamp - 20]
-	[#tache libelle: "Nettoyer" #terminée timestampCreation: timestamp]
-  [#tache libelle: "Ranger" #sélectionnée timestampCreation: timestamp - 2]
-  [#tache libelle: "Dormir" timestampCreation: timestamp + 20]
-  [#tache libelle: "Ronfler" timestampCreation: timestamp + 21]
+  [#tache libelle: "Naître" #terminée ordre: -21]
+  [#tache libelle: "Se doucher" ordre: -20]
+	[#tache libelle: "Nettoyer" #terminée ordre: 0]
+  [#tache libelle: "Ranger" #sélectionnée ordre: -2]
+  [#tache libelle: "Dormir" ordre: 20]
+  [#tache libelle: "Ronfler" ordre: 21]
   [#tache libelle: "Faire du café"]
 
 ```
